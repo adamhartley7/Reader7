@@ -1,0 +1,1231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#000000">
+<title>reader — RSVP speed reading</title>
+<style>
+:root{
+  --bg:#000; --panel:#1c1c1e; --panel2:#2c2c2e; --line:#3a3a3c;
+  --txt:#fff; --dim:#8e8e93; --faint:#6e6e73; --red:#ff3b30;
+  --serif:"New York","Iowan Old Style",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --anchor:38%;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+#app{max-width:560px;margin:0 auto;height:100dvh;position:relative;display:flex;flex-direction:column;overflow:hidden}
+button{font-family:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input,textarea,select{font-family:inherit;color:var(--txt);background:var(--panel);border:0;outline:none}
+.hidden{display:none!important}
+.screen{position:absolute;inset:0;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+
+/* ---------- splash ---------- */
+#splash{position:fixed;inset:0;background:#000;z-index:99;display:flex;align-items:center;justify-content:center;transition:opacity .5s}
+#splash .word{font:700 44px var(--serif)}
+#splash .word i{font-style:normal;color:var(--red)}
+#splash.gone{opacity:0;pointer-events:none}
+
+/* ---------- library ---------- */
+.scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 18px 120px}
+.libHead{display:flex;align-items:center;justify-content:center;position:relative;padding:14px 0 4px}
+.libHead h1{font:700 19px var(--sans);letter-spacing:.2px}
+.iconCircle{width:42px;height:42px;border-radius:50%;background:var(--panel);display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.iconCircle svg{width:20px;height:20px;stroke:var(--txt)}
+.libHead .iconCircle{position:absolute;right:0;top:8px}
+.search{display:flex;align-items:center;gap:8px;background:var(--panel);border-radius:14px;padding:11px 14px;margin:14px 0 16px}
+.search svg{width:17px;height:17px;stroke:var(--dim);flex:0 0 auto}
+.search input{background:none;flex:1;font-size:16px}
+.search input::placeholder{color:var(--dim)}
+
+.statsCard{background:var(--panel);border-radius:20px;padding:16px;margin-bottom:18px}
+.statsCard .row1{display:flex;align-items:center;gap:8px;font-weight:700;font-size:16px}
+.statsCard .row1 svg{width:18px;height:18px}
+.statsCard .row1 .chev{margin-left:auto;color:var(--dim);font-size:18px}
+.statsCard .row2{display:flex;align-items:center;justify-content:space-between;margin:14px 0 8px;font-size:15px}
+.statsCard .row2 b{font-weight:700}
+.statsCard .row2 span{color:var(--dim);font-size:13px}
+.goalBar{height:5px;border-radius:3px;background:#0e0e0f;overflow:hidden}
+.goalBar i{display:block;height:100%;background:#fff;border-radius:3px;width:0%}
+.statRow{display:flex;margin-top:16px}
+.statRow div{flex:1}
+.statRow b{display:block;font-size:22px;font-weight:800}
+.statRow span{color:var(--dim);font-size:12.5px}
+
+.importRow{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px}
+.impBtn{background:#f3f3f5;color:#000;border-radius:22px;aspect-ratio:1/1.04;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;font-weight:600;font-size:12.5px;line-height:1.15;text-align:center;padding:6px}
+.impBtn svg{width:24px;height:24px;stroke:#000}
+.impBtn:active{transform:scale(.95)}
+
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.card{border-radius:18px;aspect-ratio:3/3.9;padding:14px;display:flex;flex-direction:column;position:relative;overflow:hidden;text-align:left}
+.card h3{font:700 17px/1.25 var(--serif);margin-bottom:6px;text-shadow:0 1px 8px rgba(0,0,0,.5)}
+.card .meta{font-size:12.5px;color:rgba(255,255,255,.85)}
+.card .foot{margin-top:auto}
+.card .miniBar{height:4px;border-radius:2px;background:rgba(255,255,255,.22);overflow:hidden;margin-bottom:7px}
+.card .miniBar i{display:block;height:100%;background:#fff;width:0%}
+.card .sub{display:flex;justify-content:space-between;font-size:12px;color:rgba(255,255,255,.85)}
+.empty{color:var(--dim);text-align:center;padding:40px 20px;font-size:15px;line-height:1.5}
+
+.sectionH{font:700 24px var(--serif);margin:10px 0 14px}
+.bCard{background:var(--panel);border-radius:18px;padding:16px;margin-bottom:14px;display:block;width:100%;text-align:left}
+.bCard h3{font:700 19px var(--serif);margin-bottom:6px}
+.bCard p{color:var(--dim);font-size:14px;line-height:1.45}
+.bCard .tag{display:inline-block;margin-top:10px;font-size:12px;color:var(--dim);background:var(--panel2);border-radius:8px;padding:3px 8px}
+
+/* ---------- tab bar ---------- */
+#tabbar{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom));background:rgba(28,28,30,.92);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-radius:30px;display:flex;gap:6px;padding:7px;z-index:20}
+#tabbar button{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--dim);padding:7px 22px;border-radius:24px}
+#tabbar button svg{width:21px;height:21px;stroke:var(--dim)}
+#tabbar button.on{color:#fff;background:var(--panel2)}
+#tabbar button.on svg{stroke:#fff}
+body.noTabs #tabbar{display:none}
+
+/* ---------- reader ---------- */
+.rTop{display:flex;align-items:center;gap:10px;padding:12px 16px 4px}
+.rTitle{flex:1;text-align:center;color:var(--dim);font-size:12px;letter-spacing:1.6px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pillBtn{background:var(--panel);border-radius:18px;padding:9px 15px;font-size:13.5px;font-weight:600}
+.rProg{display:flex;justify-content:space-between;color:var(--dim);font-size:15px;padding:6px 20px 7px}
+.rBar{height:4px;border-radius:2px;background:#161617;margin:0 20px;overflow:hidden}
+.rBar i{display:block;height:100%;width:0%;background:#fff;border-radius:2px;transition:width .12s linear}
+
+#stage{flex:1;position:relative;overflow:hidden;touch-action:pan-y;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#pageView{position:absolute;inset:0;overflow-y:auto;padding:26px 8% 60px;font:700 21px/2.05 var(--serif);text-align:justify}
+#pageView .w{color:#fff}
+#pageView .w.read{color:var(--faint)}
+#pageView .w.cur i{font-style:normal;color:var(--red)}
+#pageView .pbr{display:block;height:1.1em}
+.docTag{display:flex;flex-direction:column;align-items:center;gap:10px;margin:4px 0 26px;color:#d7d7da}
+.docTag svg{width:30px;height:30px;stroke:#e8e8ea}
+.docTag b{font:700 17px var(--sans);letter-spacing:.5px;text-transform:uppercase;text-align:center;color:#d0d0d4}
+body.started .docTag{display:none}
+
+#frameView{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+.frameBox{position:relative;width:100%;height:152px}
+.frameBox .fl{position:absolute;left:0;right:0;height:1px;background:var(--line)}
+.frameBox .fl.t{top:0}.frameBox .fl.b{bottom:0}
+.frameBox .tick{position:absolute;left:var(--anchor);width:1px;height:13px;background:var(--line)}
+.frameBox .tick.t{top:-6px}.frameBox .tick.b{bottom:-6px}
+#rsvpWord{position:absolute;top:50%;left:0;transform:translateY(-50%);white-space:nowrap;font:700 clamp(32px,9vw,46px) var(--serif)}
+#rsvpWord i{font-style:normal;color:var(--red)}
+
+#hint{position:absolute;left:0;right:0;bottom:18px;text-align:center;color:#48484c;font-size:12px;letter-spacing:1.5px;text-transform:uppercase}
+
+.rCtrls{padding:6px 20px calc(20px + env(safe-area-inset-bottom));transition:opacity .25s}
+body.playing .rCtrls,body.playing .rTitle,body.playing #hint,body.playing .rTop button{opacity:0;pointer-events:none}
+.wpmRow{text-align:center;font-size:26px;font-weight:800;margin-bottom:14px;letter-spacing:.3px}
+.badge{display:inline-block;font-size:11px;font-weight:700;letter-spacing:1px;color:var(--red);border:1px solid var(--red);border-radius:8px;padding:2px 7px;vertical-align:4px;margin-right:9px}
+.sliderRow{display:flex;align-items:center;gap:12px}
+.sliderWrap{flex:1;position:relative;height:36px;border-radius:18px;background:#151517;
+  background-image:repeating-linear-gradient(90deg,transparent 0 calc(12.5% - 1px),#333336 calc(12.5% - 1px) 12.5%);
+  background-clip:content-box;padding:9px 0}
+.sliderWrap input{position:absolute;inset:0;width:100%;height:100%;-webkit-appearance:none;appearance:none;background:transparent;margin:0}
+.sliderWrap input::-webkit-slider-thumb{-webkit-appearance:none;width:30px;height:30px;border-radius:50%;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.6)}
+.sliderWrap input::-moz-range-thumb{width:30px;height:30px;border-radius:50%;background:#fff;border:0}
+.roundBtn{width:46px;height:46px;border-radius:50%;background:var(--panel);display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.roundBtn svg{width:21px;height:21px;stroke:#fff}
+.roundBtn.muted svg{stroke:var(--dim)}
+
+/* ---------- sheets & modals ---------- */
+#backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:30;opacity:0;pointer-events:none;transition:opacity .2s}
+#backdrop.on{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:50%;transform:translate(-50%,105%);bottom:0;width:100%;max-width:560px;background:var(--panel);border-radius:24px 24px 0 0;padding:22px 22px calc(26px + env(safe-area-inset-bottom));z-index:31;transition:transform .25s ease}
+.sheet.on{transform:translate(-50%,0)}
+.sheet h2{font:700 21px var(--serif);margin-bottom:16px}
+.frow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid #2a2a2c;font-size:15px}
+.frow:last-of-type{border-bottom:0}
+.frow label{color:#e9e9ec}
+.frow small{display:block;color:var(--dim);font-size:12px;margin-top:3px}
+.frow input[type=number],.frow input[type=password],.frow input[type=text],.frow select{background:var(--panel2);border-radius:10px;padding:9px 11px;font-size:15px;width:120px;text-align:right}
+.frow input[type=password],.frow input[type=text].wide{width:55%;text-align:left}
+.frow select{width:auto;text-align:left;-webkit-appearance:none;appearance:none}
+.switch{position:relative;width:51px;height:31px;border-radius:16px;background:#3a3a3c;transition:.2s;flex:0 0 auto}
+.switch.on{background:#30d158}
+.switch i{position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;transition:.2s}
+.switch.on i{left:22px}
+.bigBtn{display:block;width:100%;background:#fff;color:#000;font-weight:700;font-size:16px;border-radius:16px;padding:15px;margin-top:18px}
+.ghostBtn{display:block;width:100%;color:var(--dim);font-size:14.5px;padding:13px;margin-top:6px}
+.dangerBtn{color:var(--red)}
+.sheet textarea{width:100%;height:160px;background:var(--panel2);border-radius:12px;padding:12px;font-size:15px;resize:none;margin-bottom:4px}
+.sheet input.full{width:100%;background:var(--panel2);border-radius:12px;padding:12px;font-size:15px;margin-bottom:12px;text-align:left}
+
+.modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(.92);width:calc(100% - 56px);max-width:380px;background:var(--panel);border-radius:24px;padding:26px 22px;z-index:32;opacity:0;pointer-events:none;transition:.2s;text-align:center}
+.modal.on{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1)}
+.modal h2{font:700 24px var(--serif);margin-bottom:6px}
+.modal p{color:var(--dim);font-size:14px;margin-bottom:16px}
+.fStats{display:flex;margin:6px 0 14px}
+.fStats div{flex:1}
+.fStats b{display:block;font-size:21px;font-weight:800}
+.fStats span{color:var(--dim);font-size:12px}
+
+/* ---------- quiz ---------- */
+#scrQuiz .scroll{padding-top:8px}
+.qTop{display:flex;align-items:center;gap:10px;padding:12px 16px 0}
+.qProg{flex:1;text-align:center;color:var(--dim);font-size:13px;letter-spacing:1px;text-transform:uppercase}
+.qChip{display:inline-block;font-size:11.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--dim);border:1px solid var(--line);border-radius:8px;padding:3px 9px;margin-bottom:18px}
+.qSentence{font:700 23px/1.75 var(--serif);margin-bottom:26px}
+.qSentence u{text-decoration:none;border-bottom:2px solid var(--red);color:var(--red);padding:0 6px;white-space:nowrap}
+.opt{display:block;width:100%;text-align:left;background:var(--panel);border:1px solid transparent;border-radius:16px;padding:15px 16px;font-size:16.5px;font-weight:600;margin-bottom:11px;font-family:var(--serif)}
+.opt.right{border-color:#30d158;color:#30d158}
+.opt.wrong{border-color:var(--red);color:var(--red)}
+.qLoad{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;color:var(--dim)}
+.spinner{width:30px;height:30px;border-radius:50%;border:3px solid #2c2c2e;border-top-color:#fff;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.scoreBig{font:800 76px var(--serif);text-align:center;line-height:1}
+.scoreBig small{font-size:30px;color:var(--dim)}
+.scoreSub{text-align:center;color:var(--dim);font-size:14px;margin:6px 0 22px}
+.resH{font:700 19px var(--serif);margin:22px 0 10px}
+.resItem{display:flex;gap:10px;font-size:14.5px;line-height:1.5;color:#e6e6e9;margin-bottom:9px}
+.resItem i{font-style:normal;flex:0 0 auto}
+.gap{background:var(--panel);border-radius:16px;padding:14px 16px;font:600 15.5px/1.7 var(--serif);margin-bottom:12px}
+.gap b{color:var(--red)}
+.gap .gq{display:block;font-family:var(--sans);font-weight:600;font-size:12.5px;color:var(--dim);margin-bottom:6px}
+
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(96px + env(safe-area-inset-bottom));background:#2c2c2e;color:#fff;padding:11px 18px;border-radius:22px;font-size:14px;z-index:60;opacity:0;transition:.25s;pointer-events:none;max-width:85%;text-align:center}
+#toast.on{opacity:1}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div id="splash"><div class="word">re<i>a</i>der</div></div>
+<div id="app">
+
+<!-- ================= LIBRARY ================= -->
+<section id="scrLib" class="screen">
+  <div class="scroll">
+    <div class="libHead">
+      <h1>Reading Library</h1>
+      <button class="iconCircle" id="btnSettings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.1-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.56-1.1 1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.01a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.01a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
+    <div class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="searchIn" type="search" placeholder="Search" autocomplete="off">
+    </div>
+
+    <div class="statsCard" id="statsCard">
+      <div class="row1">
+        <svg viewBox="0 0 24 24" fill="#fff" stroke="none"><rect x="4" y="11" width="4" height="9" rx="1"/><rect x="10" y="6" width="4" height="14" rx="1"/><rect x="16" y="13" width="4" height="7" rx="1"/></svg>
+        Today's Stats <span class="chev">›</span>
+      </div>
+      <div class="row2"><b>🔥 <span id="stStreak">0</span> day streak</b><span id="stLeft">1000 words left today</span></div>
+      <div class="goalBar"><i id="stGoalFill"></i></div>
+      <div class="statRow">
+        <div><b id="stTime">0m</b><span>Time Read</span></div>
+        <div><b id="stWpm">—</b><span>Avg WPM</span></div>
+        <div><b id="stWords">0</b><span>Words</span></div>
+      </div>
+    </div>
+
+    <div class="importRow">
+      <button class="impBtn" id="impFile">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M13 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z"/><path d="M13 3v6h6"/><path d="M12 12v5M9.5 14.5h5"/></svg>
+        Import<br>File
+      </button>
+      <button class="impBtn" id="impBook">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M4 20V5a1 1 0 0 1 1-1h3v17H5a1 1 0 0 1-1-1z"/><path d="M8 4h4v17H8z"/><path d="m13.5 4.6 4 .9a1 1 0 0 1 .76 1.2L15 21l-3-.7z"/></svg>
+        Import<br>Book
+      </button>
+      <button class="impBtn" id="impWeb">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.7 2.6 4 5.7 4 9s-1.3 6.4-4 9c-2.7-2.6-4-5.7-4-9s1.3-6.4 4-9z"/></svg>
+        Import<br>Website
+      </button>
+      <button class="impBtn" id="impText">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+        Insert<br>Text
+      </button>
+    </div>
+    <input type="file" id="fileIn" accept=".txt,.md,.pdf,.epub" class="hidden">
+
+    <div class="grid" id="libGrid"></div>
+    <div class="empty hidden" id="libEmpty">Your library is empty.<br>Import a file, a website, or paste some text to start reading.</div>
+  </div>
+</section>
+
+<!-- ================= BROWSE ================= -->
+<section id="scrBrowse" class="screen hidden">
+  <div class="scroll">
+    <div class="libHead"><h1>Browse</h1></div>
+    <h2 class="sectionH">Essays</h2>
+    <div id="browseList"></div>
+  </div>
+</section>
+
+<!-- ================= READER ================= -->
+<section id="scrReader" class="screen hidden">
+  <div class="rTop">
+    <button class="iconCircle" id="btnClose" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
+    <div class="rTitle" id="rTitle"></div>
+    <button class="pillBtn" id="btnEnd">End&nbsp;✓</button>
+  </div>
+  <div class="rProg"><span id="pCur">1</span><span id="pTot">0</span></div>
+  <div class="rBar"><i id="pFill"></i></div>
+
+  <div id="stage">
+    <div id="pageView"></div>
+    <div id="frameView" class="hidden">
+      <div class="frameBox">
+        <div class="fl t"><div class="tick t"></div></div>
+        <div class="fl b"><div class="tick b"></div></div>
+        <div id="rsvpWord"></div>
+      </div>
+    </div>
+    <div id="hint">Hold to read · release to pause</div>
+  </div>
+
+  <div class="rCtrls">
+    <div class="wpmRow"><span class="badge hidden" id="trainBadge">Trainer</span><span id="wpmLabel">250 WPM</span></div>
+    <div class="sliderRow">
+      <button class="roundBtn" id="btnTrainer" aria-label="Trainer">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="#fff"/></svg>
+      </button>
+      <div class="sliderWrap"><input type="range" id="wpmSlider" min="100" max="900" step="10" value="250" aria-label="Words per minute"></div>
+      <button class="roundBtn muted" id="btnSound" aria-label="Sound">
+        <svg id="sndIco" viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M11 5 6.5 9H3v6h3.5L11 19z"/><path id="sndWaves" d="M15.5 8.5a5 5 0 0 1 0 7M18 6a8.5 8.5 0 0 1 0 12" style="display:none"/><path id="sndMute" d="m16 9 5 6m0-6-5 6"/></svg>
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= QUIZ ================= -->
+<section id="scrQuiz" class="screen hidden">
+  <div class="qTop">
+    <button class="iconCircle" id="qClose" aria-label="Close quiz">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
+    <div class="qProg" id="qProg">Comprehension</div>
+    <div style="width:42px"></div>
+  </div>
+  <div class="scroll" id="qBody"></div>
+</section>
+
+<!-- ================= SHEETS / MODALS ================= -->
+<div id="backdrop"></div>
+
+<div class="sheet" id="settingsSheet">
+  <h2>Settings</h2>
+  <div class="frow"><label>Daily goal <small>words per day for your streak</small></label><input type="number" id="setGoal" min="100" step="100"></div>
+  <div class="frow"><label>Interaction <small>how playback starts</small></label>
+    <select id="setHold"><option value="hold">Hold to read</option><option value="toggle">Tap to play / pause</option></select>
+  </div>
+  <div class="frow"><label>Word tick sound</label><div class="switch" id="setSound"><i></i></div></div>
+  <div class="frow"><label>Comprehension test <small>AI writes &amp; grades the quiz when available</small></label>
+    <select id="setQuiz"><option value="auto">AI when available</option><option value="local">From the text only</option></select>
+  </div>
+  <div class="frow"><label>Anthropic API key <small>optional — enables the AI quiz when hosted on GitHub Pages</small></label><input type="password" id="setKey" placeholder="sk-ant-…" autocomplete="off"></div>
+  <button class="bigBtn" id="setDone">Done</button>
+  <button class="ghostBtn dangerBtn" id="setReset">Erase library &amp; stats</button>
+</div>
+
+<div class="sheet" id="trainerSheet">
+  <h2>Speed trainer</h2>
+  <div class="frow"><label>Trainer <small>raises your pace gradually while you read</small></label><div class="switch" id="trOn"><i></i></div></div>
+  <div class="frow"><label>Start at</label><input type="number" id="trStart" min="100" max="900" step="10"></div>
+  <div class="frow"><label>Build up to</label><input type="number" id="trTarget" min="100" max="900" step="10"></div>
+  <div class="frow"><label>Increase by</label><input type="number" id="trStep" min="5" max="100" step="5"></div>
+  <div class="frow"><label>Every (seconds of reading)</label><input type="number" id="trEvery" min="10" max="300" step="5"></div>
+  <button class="bigBtn" id="trApply">Apply</button>
+</div>
+
+<div class="sheet" id="textSheet">
+  <h2>Insert text</h2>
+  <input class="full" id="txtTitle" type="text" placeholder="Title" autocomplete="off">
+  <textarea id="txtBody" placeholder="Paste anything…"></textarea>
+  <button class="bigBtn" id="txtAdd">Add to library</button>
+</div>
+
+<div class="sheet" id="urlSheet">
+  <h2>Import website</h2>
+  <input class="full" id="urlIn" type="text" inputmode="url" placeholder="https://…" autocomplete="off">
+  <p style="color:var(--dim);font-size:12.5px;line-height:1.5">The article text is fetched through the public r.jina.ai reader proxy, since browsers block direct cross-site reads.</p>
+  <button class="bigBtn" id="urlAdd">Fetch &amp; add</button>
+</div>
+
+<div class="modal" id="finishModal">
+  <h2 id="finTitle">Finished</h2>
+  <p id="finSub">Nice session.</p>
+  <div class="fStats">
+    <div><b id="finWords">0</b><span>Words</span></div>
+    <div><b id="finTime">0:00</b><span>Time</span></div>
+    <div><b id="finWpm">—</b><span>Avg WPM</span></div>
+  </div>
+  <button class="bigBtn" id="finQuiz">Test my comprehension</button>
+  <button class="ghostBtn" id="finSkip">Skip</button>
+</div>
+
+<div id="toast"></div>
+
+<nav id="tabbar">
+  <button id="tabLib" class="on">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M5 21V4a1 1 0 0 1 1-1h2.5v18H6a1 1 0 0 1-1-1z"/><path d="M8.5 3H12v18H8.5z"/><path d="m13.8 3.7 3.6.8a1 1 0 0 1 .76 1.2L14.7 21l-3.4-.8z"/></svg>
+    Library
+  </button>
+  <button id="tabBrowse">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg>
+    Browse
+  </button>
+</nav>
+
+</div>
+<script>
+(function(){
+'use strict';
+/* ============ helpers ============ */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-3);
+const todayKey=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
+const dayKey=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const ago=t=>{if(!t)return'New';const s=(Date.now()-t)/1e3;if(s<90)return'Just now';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';const d=Math.floor(s/86400);return d===1?'Yesterday':d+' days ago';};
+let toastT;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),2600);}
+const hashHue=s=>{let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0;return h%360;};
+
+/* ============ storage adapter: window.storage (Claude artifact) -> localStorage (GitHub Pages) -> memory ============ */
+const store=(()=>{
+  const mem={};
+  const winOK=typeof window!=='undefined'&&window.storage&&typeof window.storage.get==='function';
+  let lsOK=false;try{localStorage.setItem('__t','1');localStorage.removeItem('__t');lsOK=true;}catch(e){}
+  return{
+    async get(k){
+      if(winOK){try{const r=await window.storage.get(k);return r?r.value:null;}catch(e){return null;}}
+      if(lsOK){try{return localStorage.getItem(k);}catch(e){}}
+      return (k in mem)?mem[k]:null;
+    },
+    async set(k,v){
+      if(winOK){try{await window.storage.set(k,v);return;}catch(e){}}
+      if(lsOK){try{localStorage.setItem(k,v);return;}catch(e){}}
+      mem[k]=v;
+    },
+    async del(k){
+      if(winOK){try{await window.storage.delete(k);return;}catch(e){}}
+      if(lsOK){try{localStorage.removeItem(k);return;}catch(e){}}
+      delete mem[k];
+    }
+  };
+})();
+
+/* ============ state ============ */
+let S={
+  seeded:false,
+  settings:{wpm:250,goal:1000,hold:'hold',sound:false,quizMode:'auto',apiKey:'',
+            trainer:{on:false,start:250,target:450,step:10,every:30}},
+  days:{},      // 'YYYY-MM-DD' -> {w:words, ms:milliseconds}
+  docs:[]       // {id,title,total,pos,added,lastRead}
+};
+let saveT;function save(){clearTimeout(saveT);saveT=setTimeout(()=>{store.set('rsvp:meta',JSON.stringify(S));},250);}
+async function load(){
+  const raw=await store.get('rsvp:meta');
+  if(raw){try{
+    const o=JSON.parse(raw);
+    S={...S,...o,settings:{...S.settings,...(o.settings||{}),trainer:{...S.settings.trainer,...((o.settings||{}).trainer||{})}}};
+  }catch(e){}}
+}
+const getDocText=id=>store.get('rsvp:doc:'+id);
+async function addDoc(title,text,quiet){
+  text=String(text||'').replace(/\r/g,'').trim();
+  if(!text){toast('Nothing to import');return null;}
+  if(text.length>1800000){text=text.slice(0,1800000);toast('Long text trimmed to ~1.8M characters');}
+  const total=text.split(/\s+/).filter(Boolean).length;
+  if(total<5){toast('Text is too short');return null;}
+  const d={id:uid(),title:(title||'Untitled').slice(0,90),total,pos:0,added:Date.now(),lastRead:0};
+  S.docs.unshift(d);
+  await store.set('rsvp:doc:'+d.id,text);
+  save();renderLib();
+  if(!quiet)toast('Added to library');
+  return d;
+}
+async function removeDoc(id){
+  S.docs=S.docs.filter(d=>d.id!==id);
+  await store.del('rsvp:doc:'+id);
+  save();renderLib();
+}
+
+/* ============ stats ============ */
+function addStats(words,ms){
+  const k=todayKey();
+  const d=S.days[k]||(S.days[k]={w:0,ms:0});
+  d.w+=words;d.ms+=ms;save();
+}
+function streak(){
+  const goal=S.settings.goal||1000;let n=0;const d=new Date();
+  if(!((S.days[dayKey(d)]||{}).w>=goal))d.setDate(d.getDate()-1);
+  while((S.days[dayKey(d)]||{}).w>=goal){n++;d.setDate(d.getDate()-1);}
+  return n;
+}
+function renderStats(){
+  const t=S.days[todayKey()]||{w:0,ms:0};
+  const goal=S.settings.goal||1000;
+  $('#stStreak').textContent=streak();
+  $('#stLeft').textContent=Math.max(0,goal-t.w).toLocaleString()+' words left today';
+  $('#stGoalFill').style.width=Math.min(100,t.w/goal*100)+'%';
+  $('#stTime').textContent=Math.round(t.ms/60000)+'m';
+  $('#stWpm').textContent=t.ms>4000?Math.round(t.w/(t.ms/60000)):'—';
+  $('#stWords').textContent=t.w.toLocaleString();
+}
+
+/* ============ library ============ */
+function renderLib(){
+  renderStats();
+  const q=($('#searchIn').value||'').toLowerCase();
+  const docs=S.docs.filter(d=>!q||d.title.toLowerCase().includes(q));
+  const g=$('#libGrid');g.innerHTML='';
+  $('#libEmpty').classList.toggle('hidden',S.docs.length>0);
+  docs.forEach(d=>{
+    const pct=Math.min(100,Math.round((d.pos/Math.max(1,d.total))*100));
+    const h=hashHue(d.title);
+    const el=document.createElement('button');
+    el.className='card';
+    el.style.background='linear-gradient(160deg,hsl('+h+' 42% 30%),hsl('+((h+40)%360)+' 50% 13%))';
+    el.innerHTML='<h3>'+esc(d.title)+'</h3><div class="meta">'+d.pos.toLocaleString()+' / '+d.total.toLocaleString()+' words</div>'+
+      '<div class="foot"><div class="miniBar"><i style="width:'+pct+'%"></i></div><div class="sub"><span>'+pct+'%</span><span>'+ago(d.lastRead||d.added)+'</span></div></div>';
+    let lp;
+    el.addEventListener('pointerdown',()=>{lp=setTimeout(()=>{lp=null;if(confirm('Remove "'+d.title+'" from your library?'))removeDoc(d.id);},650);});
+    const cancel=()=>{if(lp){clearTimeout(lp);lp=0;}};
+    el.addEventListener('pointermove',cancel);
+    el.addEventListener('pointerup',e=>{if(lp){clearTimeout(lp);openDoc(d.id);}lp=0;});
+    el.addEventListener('contextmenu',e=>e.preventDefault());
+    g.appendChild(el);
+  });
+}
+$('#searchIn').addEventListener('input',renderLib);
+
+/* ============ imports ============ */
+function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error('Could not load '+src));document.head.appendChild(s);});}
+async function importPDF(file){
+  toast('Reading PDF…');
+  if(!window.pdfjsLib){
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+  const buf=await file.arrayBuffer();
+  const pdf=await window.pdfjsLib.getDocument({data:buf}).promise;
+  let out=[];
+  for(let p=1;p<=pdf.numPages;p++){
+    const page=await pdf.getPage(p);
+    const tc=await page.getTextContent();
+    out.push(tc.items.map(i=>i.str).join(' '));
+  }
+  return out.join('\n\n').replace(/\s+\n/g,'\n');
+}
+async function importEPUB(file){
+  toast('Reading EPUB…');
+  if(!window.JSZip)await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+  const zip=await window.JSZip.loadAsync(await file.arrayBuffer());
+  const dp=new DOMParser();
+  const container=dp.parseFromString(await zip.file('META-INF/container.xml').async('string'),'application/xml');
+  const opfPath=container.querySelector('rootfile').getAttribute('full-path');
+  const base=opfPath.includes('/')?opfPath.slice(0,opfPath.lastIndexOf('/')+1):'';
+  const opf=dp.parseFromString(await zip.file(opfPath).async('string'),'application/xml');
+  const manifest={};opf.querySelectorAll('manifest > item').forEach(i=>manifest[i.getAttribute('id')]=i.getAttribute('href'));
+  const refs=[...opf.querySelectorAll('spine > itemref')].map(i=>manifest[i.getAttribute('idref')]).filter(Boolean);
+  let out=[];
+  for(const href of refs){
+    const f=zip.file(base+decodeURIComponent(href))||zip.file(decodeURIComponent(href));
+    if(!f)continue;
+    const doc=dp.parseFromString(await f.async('string'),'text/html');
+    doc.querySelectorAll('script,style').forEach(n=>n.remove());
+    const t=(doc.body?doc.body.textContent:'').replace(/\n{3,}/g,'\n\n').trim();
+    if(t)out.push(t);
+  }
+  const titleEl=opf.querySelector('metadata > *|title, metadata title');
+  return{title:titleEl?titleEl.textContent.trim():'',text:out.join('\n\n')};
+}
+$('#impFile').addEventListener('click',()=>$('#fileIn').click());
+$('#impBook').addEventListener('click',()=>$('#fileIn').click());
+$('#fileIn').addEventListener('change',async e=>{
+  const f=e.target.files[0];e.target.value='';if(!f)return;
+  const name=f.name.replace(/\.[^.]+$/,'');
+  try{
+    if(/\.pdf$/i.test(f.name)){const t=await importPDF(f);await addDoc(name,t);}
+    else if(/\.epub$/i.test(f.name)){const r=await importEPUB(f);await addDoc(r.title||name,r.text);}
+    else{await addDoc(name,await f.text());}
+  }catch(err){console.error(err);toast('Import failed: '+(err.message||'unsupported file'));}
+});
+$('#impText').addEventListener('click',()=>openSheet('textSheet'));
+$('#txtAdd').addEventListener('click',async()=>{
+  const d=await addDoc($('#txtTitle').value.trim()||'Pasted text',$('#txtBody').value);
+  if(d){$('#txtTitle').value='';$('#txtBody').value='';closeSheets();}
+});
+$('#impWeb').addEventListener('click',()=>openSheet('urlSheet'));
+$('#urlAdd').addEventListener('click',async()=>{
+  let u=$('#urlIn').value.trim();if(!u)return;
+  if(!/^https?:\/\//i.test(u))u='https://'+u;
+  toast('Fetching article…');
+  try{
+    const r=await fetch('https://r.jina.ai/'+u);
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    let md=await r.text();
+    let title='';const tm=md.match(/^Title:\s*(.+)$/m);if(tm)title=tm[1].trim();
+    md=md.replace(/^Title:.*$/m,'').replace(/^URL Source:.*$/m,'').replace(/^Markdown Content:\s*$/m,'')
+         .replace(/!\[[^\]]*\]\([^)]*\)/g,'')
+         .replace(/\[([^\]]*)\]\([^)]*\)/g,'$1')
+         .replace(/^[#>*\-=_`|]+\s*/gm,'')
+         .replace(/[*_`]{1,3}([^*_`]+)[*_`]{1,3}/g,'$1')
+         .replace(/\n{3,}/g,'\n\n').trim();
+    const d=await addDoc(title||u.replace(/^https?:\/\//,'').split('/')[0],md);
+    if(d){$('#urlIn').value='';closeSheets();}
+  }catch(err){console.error(err);toast('Could not fetch that page (blocked or offline)');}
+});
+
+/* ============ built-in content (original copy) ============ */
+const WELCOME={title:'Start here — how this reader works',text:
+'Welcome. This reader is built on a simple idea called Rapid Serial Visual Presentation. Instead of dragging your eyes across lines of text, the words come to you, one at a time, anchored on a red focal letter that never moves. Your eyes stay still, the page noise disappears, and all of your attention goes into processing each word.\n\n'+
+'On paper, most adults read at roughly 200 to 250 words per minute. With the eye movement removed, 350 to 450 quickly feels comfortable, and practiced readers go a good deal further. You do not need to force it. Speed should feel like flow, not strain.\n\n'+
+'Here is the whole manual. Press and hold anywhere on this page to start the stream of words. Release your finger to pause. While paused, swipe left or right to turn the page, and double tap any word to jump straight to it. The slider at the bottom sets your pace, and the number above it shows your current words per minute.\n\n'+
+'The timing is adaptive rather than mechanical. Long words stay on screen slightly longer than short ones, numbers get extra time, and the stream breathes briefly at commas and a little longer at full stops, so the rhythm follows the shape of each sentence. The pacing is balanced so that your average speed still matches the number on the slider.\n\n'+
+'Two more things live in this reader. The target button opens the speed trainer, which starts you at an easy pace and quietly raises it every so often while you read, so your ceiling climbs without you noticing. And when you finish a session, take the comprehension test. It quizzes you on what you just read, scores you, points out what stuck and what slipped, and then fills in the gaps you missed.\n\n'+
+'That is the full tour. Import your own material from the library screen, or try an essay from the Browse tab. Hold the screen to begin.'};
+
+const ESSAYS=[
+{title:'Why One Word at a Time Works',blurb:'The eye mechanics behind RSVP reading — and its honest limits.',tag:'reading science',text:
+'Reading feels smooth, but the eye does nothing smoothly. It moves in small jumps called saccades, each lasting around 20 to 40 milliseconds, and between jumps it parks on a word in a pause called a fixation, typically 200 to 250 milliseconds long. Almost all visual intake happens during fixations; during the jumps themselves you are effectively blind. On top of that, about 10 to 15 percent of saccades in ordinary reading go backwards. These regressions happen when the eye overshoots, when a sentence parses badly, or when attention simply drifts.\n\n'+
+'Rapid Serial Visual Presentation attacks the mechanical part of that budget. If every word appears in the same place, there is nothing to jump to. The saccades, the overshoots, and most of the backtracking disappear, and the time they consumed is returned to actual word processing. That is the honest core of the speed gain: RSVP does not make your brain faster, it stops your eyes from spending time in transit.\n\n'+
+'Placement matters more than it looks. Readers do not fixate the middle of a word but a spot slightly left of centre, sometimes called the optimal viewing position. Words recognise fastest when they land there. This is why a good RSVP reader marks a focal letter and aligns every word to it, rather than centring words naively. The marked letter sits where your eye wants to land anyway.\n\n'+
+'There are limits, and they are worth respecting. Comprehension research is consistent on one point: pushed far enough, speed always trades against understanding. The pauses RSVP removes were not all waste. Some of that time was used to integrate a sentence, to connect a clause back to the one before it, and skilled readers use regressions deliberately to repair misunderstandings. A stream that never pauses takes that repair tool away. This is why sensible RSVP pacing is adaptive: longer words earn more milliseconds, numbers earn more still, and the stream rests briefly at punctuation, because that is where integration happens.\n\n'+
+'The practical conclusion is unglamorous and useful. For most readers, RSVP shines between roughly 300 and 600 words per minute, with material that is linear and familiar in vocabulary. Dense technical writing deserves a slower setting and a willingness to jump back. Treat the speed slider like a gearbox rather than a scoreboard, and check yourself with a comprehension test now and then. Speed you cannot recall is not reading; it is scenery.'},
+{title:'The Forgetting Curve, and How to Beat It',blurb:'Ebbinghaus, retrieval practice, and why a quiz after reading is not optional.',tag:'memory',text:
+'In 1885 Hermann Ebbinghaus published the first serious measurements of forgetting, using himself as the only subject. He memorised lists of nonsense syllables, waited, and then measured how much effort it took to relearn them. The result was the forgetting curve: loss is steep at first and then flattens. A large share of new material fades within the first day, and most of what will be lost is gone within a week, while the remainder can persist for a long time.\n\n'+
+'The curve sounds grim, but Ebbinghaus also found the levers that bend it. Each time material is reviewed, the curve restarts from a higher point and decays more slowly. Spacing those reviews out beats massing them together, an effect so reliable it has been replicated for over a century and sits at the heart of every spaced repetition system.\n\n'+
+'The second lever matters even more for readers. Memory is strengthened far more by pulling information out than by pushing it in again. This is the testing effect. In a well known 2006 study by Roediger and Karpicke, students who read a passage once and then tried to recall it outperformed students who read the same passage repeatedly, when both groups were tested a week later. Rereading felt better and worked worse. The act of retrieval, including the failed attempts, is what builds durable memory.\n\n'+
+'This is why a comprehension test belongs at the end of a reading session rather than feeling like an exam. The quiz is not measuring the learning; it is a large part of the learning. Getting a question wrong and then immediately seeing the missing fact is one of the most efficient corrections available, because the error flags exactly where the gap is and the feedback lands while the context is still warm.\n\n'+
+'Sleep does quiet work here too. Memories consolidate during sleep, particularly during slow wave stages, and material reviewed close to sleep tends to survive better than material crammed and abandoned mid afternoon.\n\n'+
+'The routine that falls out of all this is short. Read once with full attention. Test yourself immediately, in your own words before you peek. Revisit only what you missed, then space the next review out by days, not minutes. The forgetting curve is not a verdict. It is a schedule, and it can be negotiated with.'},
+{title:'Attention Is a Budget',blurb:'Task switching, phone gravity, and reading as attention training.',tag:'focus',text:
+'Attention behaves less like a spotlight and more like a budget: finite, spendable, and easy to leak. The largest leak is switching. When you hop from a document to a message and back, the document does not reopen in your mind where you left it. Part of your thinking stays attached to the message, a phenomenon researchers call attention residue. Studies of interrupted office work, notably by Gloria Mark and colleagues, suggest that returning to a demanding task after an interruption can take on the order of twenty minutes, and that people often compensate by working faster and more stressed rather than better.\n\n'+
+'The phone deserves its own line item. In a 2017 series of experiments, Adrian Ward and colleagues found that the mere presence of a participant\u2019s own smartphone, face down and silent on the desk, measurably reduced working memory capacity compared with leaving it in another room. The participants did not report being distracted. The cost was paid below awareness, in the background effort of not attending to the device. You do not have to touch a phone for it to tax you; you only have to know it is there.\n\n'+
+'Long form reading is one of the few common activities that trains the opposite skill. A book does not ping. Its reward arrives on a delay, paragraph by paragraph, which is precisely the schedule modern feeds have trained us away from. This is also why reading can feel unusually hard after a scrolling session: the comparison rate is wrong. Ten minutes of sustained reading is a genuinely different cognitive act from ten minutes of skimming fragments, even if the word counts match.\n\n'+
+'The practical fixes are mostly environmental, because willpower is the most expensive currency in the budget. Put the phone in another room rather than face down. Read in sessions with a visible end, twenty or thirty minutes, because a known finish line reduces the urge to check. Keep a scrap of paper for stray thoughts so they can be evicted instead of entertained. And give the eyes a single stream to follow, which is exactly what a one word at a time reader is for: it makes the next unit of input unambiguous, so there is nothing to decide and nothing to wander toward.\n\n'+
+'None of this is about reading more pages per day. It is about owning the budget instead of leaking it, ten deliberate minutes at a time.'}
+];
+function renderBrowse(){
+  const list=$('#browseList');list.innerHTML='';
+  ESSAYS.forEach(e=>{
+    const b=document.createElement('button');
+    b.className='bCard';
+    b.innerHTML='<h3>'+esc(e.title)+'</h3><p>'+esc(e.blurb)+'</p><span class="tag">'+esc(e.tag)+'</span>';
+    b.addEventListener('click',async()=>{
+      let d=S.docs.find(x=>x.title===e.title);
+      if(!d)d=await addDoc(e.title,e.text,true);
+      if(d)openDoc(d.id);
+    });
+    list.appendChild(b);
+  });
+}
+
+/* ============ tokenizing & adaptive timing ============ */
+function tokenize(text){
+  const toks=[];
+  const paras=text.split(/\n{2,}/);
+  paras.forEach((p,pi)=>{
+    const ws=p.split(/\s+/).filter(Boolean);
+    ws.forEach((w,i)=>toks.push({t:w,pEnd:(i===ws.length-1&&pi<paras.length-1)}));
+  });
+  return toks;
+}
+function multOf(tok){
+  const raw=tok.t;
+  const w=raw.replace(/[^A-Za-z0-9'\u2019-]/g,'');
+  const L=w.length;
+  let m;
+  if(L<=3)m=0.85;else if(L<=6)m=1;else m=1+Math.min((L-6)*0.06,0.6);  // longer words earn more time
+  if(/\d/.test(w))m*=1.45;                                            // numbers are slow to encode
+  if(/[.!?\u2026]['")\]\u201d\u2019]?$/.test(raw))m*=2.1;             // sentence end: integration pause
+  else if(/[,;:]['")\]\u201d\u2019]?$/.test(raw)||/[\u2014\u2013]$/.test(raw))m*=1.55; // clause pause
+  if(tok.pEnd)m*=1.35;                                                // paragraph breath
+  return m;
+}
+
+/* ============ reader engine ============ */
+const R={doc:null,tokens:[],mult:[],norm:1,idx:0,playing:false,timer:null,wpm:250,WPP:88,
+         sessFrom:0,sessWords:0,sessMs:0,uncW:0,uncMs:0,train:{active:false,acc:0},flat:'',offs:[]};
+const stage=$('#stage'),pageView=$('#pageView'),frameView=$('#frameView'),rsvpWord=$('#rsvpWord');
+
+async function openDoc(id){
+  const d=S.docs.find(x=>x.id===id);if(!d)return;
+  const text=await getDocText(id);
+  if(!text){toast('Could not load the text for this item');return;}
+  R.doc=d;R.tokens=tokenize(text);
+  R.mult=R.tokens.map(multOf);
+  R.norm=R.mult.reduce((a,b)=>a+b,0)/Math.max(1,R.mult.length);
+  R.offs=new Array(R.tokens.length);let pos=0;
+  R.flat=R.tokens.map((tk,i)=>{R.offs[i]=pos;pos+=tk.t.length+1;return tk.t;}).join(' ');
+  R.idx=Math.min(d.pos||0,R.tokens.length-1);
+  if((d.pos||0)>=R.tokens.length){R.idx=0;toast('Starting over from the top');}
+  R.sessFrom=R.idx;R.sessWords=0;R.sessMs=0;R.uncW=0;R.uncMs=0;
+  R.train.active=!!S.settings.trainer.on;R.train.acc=0;
+  R.wpm=R.train.active?S.settings.trainer.start:S.settings.wpm;
+  document.body.classList.toggle('started',(d.pos||0)>0);
+  $('#rTitle').textContent=d.title;
+  $('#pTot').textContent=R.tokens.length;
+  showScreen('reader');
+  renderPage();updateProg();updateWpmUI();
+}
+function pageStart(){return Math.floor(R.idx/R.WPP)*R.WPP;}
+function renderPage(){
+  const s=pageStart(),e=Math.min(R.tokens.length,s+R.WPP);
+  let html='';
+  if(!document.body.classList.contains('started')&&R.doc){
+    html+='<div class="docTag"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.6"><path d="M8 3h8a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M9.5 7.5h5M9.5 11h5M9.5 14.5h3"/></svg><b>Hold to read · release to pause</b></div>';
+  }
+  for(let i=s;i<e;i++){
+    const tk=R.tokens[i];
+    let cls='w'+(i<R.idx?' read':'')+(i===R.idx?' cur':'');
+    let inner=esc(tk.t);
+    if(i===R.idx){
+      const o=orpOf(tk.t);
+      inner=esc(tk.t.slice(0,o))+'<i>'+esc(tk.t[o]||'')+'</i>'+esc(tk.t.slice(o+1));
+    }
+    html+='<span class="'+cls+'" data-i="'+i+'">'+inner+'</span> ';
+    if(tk.pEnd)html+='<span class="pbr"></span>';
+  }
+  pageView.innerHTML=html;
+  const cur=pageView.querySelector('.cur');
+  if(cur)cur.scrollIntoView({block:'center'});
+  pageView.scrollTop=Math.max(0,pageView.scrollTop);
+}
+function orpOf(raw){
+  let fi=raw.search(/[A-Za-z0-9\u00C0-\u024F\u0400-\u04FF]/);
+  if(fi<0)return Math.max(0,Math.floor(raw.length/2));
+  const clean=raw.slice(fi).replace(/[^A-Za-z0-9\u00C0-\u024F\u0400-\u04FF'\u2019-]+.*$/,'');
+  const L=clean.length;
+  const rel=L<=1?0:L<=5?1:L<=9?2:L<=13?3:4;
+  return Math.min(raw.length-1,fi+rel);
+}
+function showWord(i){
+  const raw=R.tokens[i].t,o=orpOf(raw);
+  rsvpWord.innerHTML=esc(raw.slice(0,o))+'<i>'+esc(raw[o]||'')+'</i>'+esc(raw.slice(o+1));
+  const orpEl=rsvpWord.querySelector('i');
+  const box=frameView.querySelector('.frameBox');
+  const anchor=box.clientWidth*0.38;
+  const center=orpEl.offsetLeft+orpEl.offsetWidth/2;
+  rsvpWord.style.left=(anchor-center)+'px';
+}
+function updateProg(){
+  $('#pCur').textContent=Math.min(R.idx+1,R.tokens.length);
+  $('#pFill').style.width=(R.idx/Math.max(1,R.tokens.length-1)*100)+'%';
+}
+function updateWpmUI(){
+  $('#wpmLabel').textContent=Math.round(R.wpm)+' WPM';
+  $('#wpmSlider').value=Math.round(R.wpm);
+  const b=$('#trainBadge');
+  b.classList.toggle('hidden',!R.train.active);
+  if(R.train.active)b.textContent='Trainer ↑'+S.settings.trainer.target;
+}
+
+/* ---- playback ---- */
+function startPlay(){
+  if(R.playing||!R.tokens.length)return;
+  if(R.idx>=R.tokens.length)R.idx=0;
+  R.playing=true;
+  document.body.classList.add('playing','started');
+  pageView.classList.add('hidden');frameView.classList.remove('hidden');
+  step();
+}
+function step(){
+  showWord(R.idx);updateProg();
+  if(S.settings.sound)tick();
+  const base=60000/R.wpm;
+  const d=base*R.mult[R.idx]/R.norm;
+  R.timer=setTimeout(()=>{
+    R.sessWords++;R.sessMs+=d;R.uncW++;R.uncMs+=d;
+    trainerTick(d);
+    R.idx++;
+    if(R.idx>=R.tokens.length){finishPlay(true);return;}
+    step();
+  },d);
+}
+function pausePlay(){
+  if(!R.playing)return;
+  clearTimeout(R.timer);R.playing=false;
+  document.body.classList.remove('playing');
+  frameView.classList.add('hidden');pageView.classList.remove('hidden');
+  renderPage();commit();persistPos();
+}
+function finishPlay(done){
+  clearTimeout(R.timer);R.playing=false;
+  document.body.classList.remove('playing');
+  frameView.classList.add('hidden');pageView.classList.remove('hidden');
+  R.idx=Math.min(R.idx,R.tokens.length-1);
+  renderPage();updateProg();commit();persistPos(done);
+  openFinish(done);
+}
+function commit(){if(R.uncW>0){addStats(R.uncW,R.uncMs);R.uncW=0;R.uncMs=0;renderStats();}}
+function persistPos(done){
+  if(!R.doc)return;
+  R.doc.pos=done?R.tokens.length:R.idx;
+  R.doc.lastRead=Date.now();save();
+}
+function trainerTick(d){
+  if(!R.train.active)return;
+  const t=S.settings.trainer;
+  R.train.acc+=d;
+  if(R.train.acc>=t.every*1000){
+    R.train.acc-=t.every*1000;
+    if(R.wpm<t.target){R.wpm=Math.min(t.target,R.wpm+t.step);updateWpmUI();}
+  }
+}
+
+/* ---- sound ---- */
+let AC=null;
+function tick(){
+  try{
+    AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+    if(AC.state==='suspended')AC.resume();
+    const o=AC.createOscillator(),g=AC.createGain(),t=AC.currentTime;
+    o.type='square';o.frequency.value=1900;
+    g.gain.setValueAtTime(0.02,t);g.gain.exponentialRampToValueAtTime(0.0001,t+0.03);
+    o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+0.035);
+  }catch(e){}
+}
+function syncSoundBtn(){
+  $('#btnSound').classList.toggle('muted',!S.settings.sound);
+  $('#sndWaves').style.display=S.settings.sound?'':'none';
+  $('#sndMute').style.display=S.settings.sound?'none':'';
+  const sw=$('#setSound');sw.classList.toggle('on',S.settings.sound);
+}
+$('#btnSound').addEventListener('click',()=>{S.settings.sound=!S.settings.sound;save();syncSoundBtn();});
+
+/* ---- gestures ---- */
+let pd=null,lastTap={t:0,i:-1};
+stage.addEventListener('pointerdown',e=>{
+  if(document.body.classList.contains('sheetOpen'))return;
+  pd={x:e.clientX,y:e.clientY,t:Date.now(),moved:false,dx:0,dy:0,held:false,target:e.target};
+  if(S.settings.hold==='hold'&&!R.playing){
+    pd.timer=setTimeout(()=>{if(pd&&!pd.moved){pd.held=true;startPlay();}},230);
+  }
+});
+stage.addEventListener('pointermove',e=>{
+  if(!pd)return;
+  pd.dx=e.clientX-pd.x;pd.dy=e.clientY-pd.y;
+  if(Math.abs(pd.dx)>26||Math.abs(pd.dy)>26){pd.moved=true;clearTimeout(pd.timer);}
+});
+window.addEventListener('pointerup',e=>{
+  if(!pd)return;
+  clearTimeout(pd.timer);
+  const dt=Date.now()-pd.t;
+  if(R.playing){
+    if(S.settings.hold==='hold')pausePlay();
+    else if(!pd.moved&&dt<300)pausePlay();
+  }else if(pd.moved&&Math.abs(pd.dx)>56&&Math.abs(pd.dx)>Math.abs(pd.dy)*1.3){
+    turnPage(pd.dx<0?1:-1);
+  }else if(!pd.moved&&dt<300){
+    tapPaused(pd.target);
+  }
+  pd=null;
+});
+stage.addEventListener('contextmenu',e=>e.preventDefault());
+let toggleT=null;
+function tapPaused(target){
+  const w=target.closest?target.closest('.w'):null;
+  const i=w?+w.dataset.i:-1;
+  const now=Date.now();
+  if(w&&now-lastTap.t<380&&lastTap.i===i){           // double tap a word -> jump
+    clearTimeout(toggleT);toggleT=null;
+    R.idx=i;renderPage();updateProg();persistPos();
+    lastTap={t:0,i:-1};return;
+  }
+  lastTap={t:now,i:i};
+  if(S.settings.hold==='toggle'){
+    clearTimeout(toggleT);
+    toggleT=setTimeout(()=>{toggleT=null;if(!R.playing)startPlay();},390);
+  }else if(!w){
+    flashHint();
+  }
+}
+function flashHint(){const h=$('#hint');h.style.color='#9a9aa0';setTimeout(()=>h.style.color='',450);}
+function turnPage(dir){
+  const np=Math.max(0,Math.min(Math.floor((R.tokens.length-1)/R.WPP),Math.floor(R.idx/R.WPP)+dir));
+  R.idx=np*R.WPP;renderPage();updateProg();persistPos();
+}
+document.addEventListener('keydown',e=>{
+  if($('#scrReader').classList.contains('hidden'))return;
+  if(e.code==='Space'){e.preventDefault();R.playing?pausePlay():startPlay();}
+  else if(e.key==='ArrowRight'&&!R.playing)turnPage(1);
+  else if(e.key==='ArrowLeft'&&!R.playing)turnPage(-1);
+  else if(e.key==='Escape')closeReader();
+});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&R.playing)pausePlay();});
+
+/* ---- slider / trainer / top buttons ---- */
+$('#wpmSlider').addEventListener('input',e=>{
+  R.wpm=+e.target.value;
+  if(!R.train.active){S.settings.wpm=R.wpm;save();}
+  $('#wpmLabel').textContent=R.wpm+' WPM';
+});
+$('#btnTrainer').addEventListener('click',()=>{
+  const t=S.settings.trainer;
+  $('#trOn').classList.toggle('on',t.on);
+  $('#trStart').value=t.start;$('#trTarget').value=t.target;
+  $('#trStep').value=t.step;$('#trEvery').value=t.every;
+  openSheet('trainerSheet');
+});
+$('#trOn').addEventListener('click',e=>e.currentTarget.classList.toggle('on'));
+$('#trApply').addEventListener('click',()=>{
+  const t=S.settings.trainer;
+  t.on=$('#trOn').classList.contains('on');
+  t.start=Math.max(60,+$('#trStart').value||250);
+  t.target=Math.max(t.start,+$('#trTarget').value||450);
+  t.step=Math.max(5,+$('#trStep').value||10);
+  t.every=Math.max(5,+$('#trEvery').value||30);
+  save();
+  R.train.active=t.on;R.train.acc=0;
+  if(t.on)R.wpm=t.start;else R.wpm=S.settings.wpm;
+  updateWpmUI();closeSheets();
+  toast(t.on?'Trainer on: '+t.start+' → '+t.target+' WPM':'Trainer off');
+});
+$('#btnClose').addEventListener('click',closeReader);
+function closeReader(){
+  if(R.playing)pausePlay();else{commit();persistPos();}
+  R.doc=null;showScreen('lib');renderLib();
+}
+$('#btnEnd').addEventListener('click',()=>{
+  if(R.playing)pausePlay();
+  if(R.sessWords<1&&R.idx<=R.sessFrom){toast('Read a little first, then end the session');return;}
+  openFinish(false);
+});
+
+/* ---- finish modal ---- */
+function openFinish(done){
+  $('#finTitle').textContent=done?'Finished':'Session ended';
+  $('#finSub').textContent=done?'You reached the end of "'+R.doc.title+'".':'Progress saved.';
+  $('#finWords').textContent=R.sessWords.toLocaleString();
+  const s=Math.round(R.sessMs/1000);
+  $('#finTime').textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+  $('#finWpm').textContent=R.sessMs>3000?Math.round(R.sessWords/(R.sessMs/60000)):'—';
+  $('#finQuiz').disabled=false;
+  openModal('finishModal');
+}
+$('#finSkip').addEventListener('click',()=>{closeSheets();closeReader();});
+$('#finQuiz').addEventListener('click',()=>{closeSheets();startQuiz();});
+
+/* ---- sheets/modals plumbing ---- */
+function openSheet(id){document.body.classList.add('sheetOpen');$('#backdrop').classList.add('on');$('#'+id).classList.add('on');}
+function openModal(id){document.body.classList.add('sheetOpen');$('#backdrop').classList.add('on');$('#'+id).classList.add('on');}
+function closeSheets(){document.body.classList.remove('sheetOpen');$('#backdrop').classList.remove('on');document.querySelectorAll('.sheet.on,.modal.on').forEach(n=>n.classList.remove('on'));}
+$('#backdrop').addEventListener('click',closeSheets);
+
+/* ---- settings ---- */
+$('#btnSettings').addEventListener('click',()=>{
+  $('#setGoal').value=S.settings.goal;
+  $('#setHold').value=S.settings.hold;
+  $('#setQuiz').value=S.settings.quizMode;
+  $('#setKey').value=S.settings.apiKey;
+  syncSoundBtn();
+  openSheet('settingsSheet');
+});
+$('#setSound').addEventListener('click',()=>{S.settings.sound=!S.settings.sound;save();syncSoundBtn();});
+$('#setDone').addEventListener('click',()=>{
+  S.settings.goal=Math.max(50,+$('#setGoal').value||1000);
+  S.settings.hold=$('#setHold').value;
+  S.settings.quizMode=$('#setQuiz').value;
+  S.settings.apiKey=$('#setKey').value.trim();
+  $('#hint').textContent=S.settings.hold==='hold'?'Hold to read · release to pause':'Tap to play · tap to pause';
+  save();renderStats();closeSheets();
+});
+$('#setReset').addEventListener('click',async()=>{
+  if(!confirm('Erase everything — library, stats and settings?'))return;
+  for(const d of S.docs)await store.del('rsvp:doc:'+d.id);
+  await store.del('rsvp:meta');
+  location.reload();
+});
+
+/* ============ screens & tabs ============ */
+function showScreen(name){
+  $('#scrLib').classList.toggle('hidden',name!=='lib');
+  $('#scrBrowse').classList.toggle('hidden',name!=='browse');
+  $('#scrReader').classList.toggle('hidden',name!=='reader');
+  $('#scrQuiz').classList.toggle('hidden',name!=='quiz');
+  $('#tabLib').classList.toggle('on',name==='lib');
+  $('#tabBrowse').classList.toggle('on',name==='browse');
+  document.body.classList.toggle('noTabs',name==='reader'||name==='quiz');
+  if(name!=='reader')document.body.classList.remove('playing');
+}
+$('#tabLib').addEventListener('click',()=>{showScreen('lib');renderLib();});
+$('#tabBrowse').addEventListener('click',()=>showScreen('browse'));
+
+/* ============ comprehension quiz ============ */
+const Q={qs:[],shorts:[],ai:false,cur:0,answers:[],shortAns:[],from:0,to:0};
+const STOP=new Set(('about above after again against almost along already also although always among anything around '+
+'because become becomes been before being below between both cannot could doing down during each either enough every '+
+'everything first found further getting given goes going great group having here hers herself himself however inside '+
+'instead into itself keeps known large later least leave less little longer made make makes many maybe might more most '+
+'much must myself near nearly need never next nothing often once only other others ought ourselves outside over own '+
+'people perhaps place point quite rather really right said same says second seem seemed seems several shall should '+
+'since small some something sometimes soon still such taken than that their theirs them themselves then there these '+
+'they thing things think this those three through thus times together toward turned under until upon used uses using '+
+'very want wants well went were what when where whether which while whole whose will with within without words would '+
+'years young your yours').split(/\s+/));
+function cleanWord(raw){const m=raw.match(/[A-Za-z][A-Za-z'\u2019-]*/);return m?m[0]:'';}
+function shuffle(arr){const a=arr.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=a[i];a[i]=a[j];a[j]=t;}return a;}
+function matchCase(w,like){return /^[A-Z]/.test(like)?w.charAt(0).toUpperCase()+w.slice(1):w.toLowerCase();}
+function sliceTokens(a,b){
+  if(b<=a)return'';
+  const start=R.offs[a];
+  const end=R.offs[b-1]+R.tokens[b-1].t.length;
+  return R.flat.slice(start,end);
+}
+function sessionText(){
+  const txt=sliceTokens(Q.from,Q.to);
+  if(txt.length<=7000)return txt;
+  const mid=Math.floor(txt.length/2);
+  return txt.slice(0,2800)+'\n[...]\n'+txt.slice(mid-1100,mid+1100)+'\n[...]\n'+txt.slice(-2200);
+}
+function localQuiz(from,to){
+  const freq={};
+  for(let i=from;i<to;i++){const w=cleanWord(R.tokens[i].t).toLowerCase();if(w.length>=5)freq[w]=(freq[w]||0)+1;}
+  const sents=[];let st=from;
+  for(let i=from;i<to;i++){
+    const raw=R.tokens[i].t;
+    const end=/[.!?\u2026]['")\]\u201d\u2019]?$/.test(raw)||R.tokens[i].pEnd||i===to-1;
+    if(end){const len=i-st+1;if(len>=8&&len<=45)sents.push({s:st,e:i});st=i+1;}
+  }
+  function scoreCand(i,sentStart){
+    const w=cleanWord(R.tokens[i].t);
+    if(w.length<5)return 0;
+    const lw=w.toLowerCase();
+    if(STOP.has(lw))return 0;
+    if(!/^[A-Za-z][A-Za-z'\u2019-]*$/.test(w))return 0;
+    const f=freq[lw]||1;
+    if(f>4)return 0;
+    let sc=Math.min(w.length,12)+(f===1?3:f===2?1:0);
+    if(i>sentStart&&/^[A-Z]/.test(w))sc+=2;
+    return sc;
+  }
+  const usable=[];
+  sents.forEach(sn=>{
+    let best=-1,bsc=0;
+    for(let i=sn.s;i<=sn.e;i++){const sc=scoreCand(i,sn.s);if(sc>bsc){bsc=sc;best=i;}}
+    if(best>=0)usable.push({s:sn.s,e:sn.e,ci:best});
+  });
+  if(!usable.length)return[];
+  const N=Math.min(8,usable.length);
+  const picked=[];const seen=new Set();
+  for(let k=0;k<N;k++){
+    const idx=Math.min(usable.length-1,Math.floor(k*usable.length/N));
+    if(!seen.has(idx)){seen.add(idx);picked.push(usable[idx]);}
+  }
+  const pool=[];const poolSeen=new Set();
+  for(let i=from;i<to;i++){
+    const w=cleanWord(R.tokens[i].t);
+    const lw=w.toLowerCase();
+    if(w.length>=5&&!STOP.has(lw)&&(freq[lw]||9)<=4&&!poolSeen.has(lw)&&/^[A-Za-z][A-Za-z'\u2019-]*$/.test(w)){poolSeen.add(lw);pool.push(w);}
+  }
+  const qs=[];
+  picked.forEach(sn=>{
+    const raw=R.tokens[sn.ci].t;
+    const m=raw.match(/^([^A-Za-z]*)([A-Za-z][A-Za-z'\u2019-]*)([\s\S]*)$/);
+    if(!m)return;
+    const ans=m[2];
+    const sentWords=new Set();
+    for(let i=sn.s;i<=sn.e;i++)sentWords.add(cleanWord(R.tokens[i].t).toLowerCase());
+    let cands=shuffle(pool.filter(w=>w.toLowerCase()!==ans.toLowerCase()&&!sentWords.has(w.toLowerCase())));
+    cands.sort((a,b)=>Math.abs(a.length-ans.length)-Math.abs(b.length-ans.length));
+    const ds=[];const dSeen=new Set([ans.toLowerCase()]);
+    for(const w of shuffle(cands.slice(0,14))){
+      const cw=matchCase(w,ans);
+      if(!dSeen.has(cw.toLowerCase())){dSeen.add(cw.toLowerCase());ds.push(cw);}
+      if(ds.length===3)break;
+    }
+    if(ds.length<3)return;
+    const words=[];
+    for(let i=sn.s;i<=sn.e;i++)words.push(i===sn.ci?(m[1]+'_____'+m[3]):R.tokens[i].t);
+    const opts=shuffle([ans].concat(ds));
+    const rel=(sn.s-from)/Math.max(1,to-from);
+    qs.push({q:words.join(' '),options:opts,answer:opts.indexOf(ans),
+             where:rel<1/3?'early':rel<2/3?'middle':'late',src:{s:sn.s,e:sn.e,ci:sn.ci}});
+  });
+  return qs;
+}
+
+/* ---- Claude API (keyless inside a Claude artifact; bring your own key on GitHub Pages) ---- */
+async function claudeText(prompt){
+  const headers={'content-type':'application/json'};
+  const key=(S.settings.apiKey||'').trim();
+  if(key){headers['x-api-key']=key;headers['anthropic-version']='2023-06-01';headers['anthropic-dangerous-direct-browser-access']='true';}
+  const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:headers,
+    body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,messages:[{role:'user',content:prompt}]})});
+  if(!r.ok)throw new Error('API '+r.status);
+  const data=await r.json();
+  return (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n');
+}
+function parseJSON(t){return JSON.parse(t.replace(/```json|```/g,'').trim());}
+async function aiQuiz(text){
+  const p='You write reading-comprehension quizzes. Based ONLY on the text below, respond with STRICT JSON and nothing else (no markdown, no preamble), in exactly this shape:\n'+
+  '{"mcq":[{"q":"question","options":["a","b","c","d"],"answer":0,"where":"early"}],"short":[{"q":"question","ideal":"model answer"}]}\n'+
+  'Rules: exactly 5 mcq items and 2 short items. Every question must be answerable purely from the text. Each mcq has exactly one correct option and three plausible distractors; "answer" is the index of the correct option. "where" is "early", "middle" or "late" by position in the text. Short items ask for specific facts; "ideal" is a one or two sentence model answer. Keep every string under 200 characters.\n\nTEXT:\n'+text;
+  return parseJSON(await claudeText(p));
+}
+async function aiGrade(wrong,mcqRight){
+  const missed=wrong.length?wrong.map(x=>'- Q: '+x.q.q+' | correct: '+x.q.options[x.q.answer]).join('\n'):'(none)';
+  const shorts=Q.shorts.length?Q.shorts.map((s,i)=>'- Q: '+s.q+'\n  ideal: '+s.ideal+'\n  reader answered: '+(Q.shortAns[i]||'(blank)')).join('\n'):'(none)';
+  const p='You are grading a reading-comprehension test. The reader got '+mcqRight+' of '+Q.qs.length+' multiple-choice questions right.\n'+
+  'Missed multiple-choice questions:\n'+missed+'\n\nShort-answer responses:\n'+shorts+'\n\n'+
+  'Respond with STRICT JSON only, no markdown:\n{"shortScores":[0,0],"strengths":["..."],"improvements":["..."],"gaps":"..."}\n'+
+  'Rules: shortScores has one integer 0-2 per short answer in order (2 = captures the ideal answer, 1 = partial, 0 = wrong or blank). strengths: 2-3 short, specific observations about what the reader retained well. improvements: 2-3 short, specific, actionable points. gaps: under 120 words, plainly restate ONLY the facts the reader missed, so the gaps get filled. Keep every string under 200 characters.';
+  return parseJSON(await claudeText(p));
+}
+
+/* ---- quiz flow ---- */
+function qLoading(msg){
+  $('#qProg').textContent='Comprehension';
+  $('#qBody').innerHTML='<div class="qLoad" style="min-height:55vh"><div class="spinner"></div><div>'+esc(msg)+'</div></div>';
+}
+async function startQuiz(){
+  const from=R.sessFrom,to=Math.min(R.idx+1,R.tokens.length);
+  if(to-from<60){toast('Read at least 60 words or so first, then test');return;}
+  Q.from=from;Q.to=to;Q.cur=0;Q.answers=[];Q.shortAns=[];Q.qs=[];Q.shorts=[];Q.ai=false;
+  showScreen('quiz');
+  qLoading('Writing your quiz\u2026');
+  if(S.settings.quizMode!=='local'){
+    try{
+      const data=await aiQuiz(sessionText());
+      const mcq=Array.isArray(data.mcq)?data.mcq:[];
+      Q.qs=mcq.filter(q=>q&&q.q&&Array.isArray(q.options)&&q.options.length>=2)
+        .slice(0,6)
+        .map(q=>({q:String(q.q),options:q.options.map(String),
+                  answer:Math.max(0,Math.min(q.options.length-1,parseInt(q.answer,10)||0)),
+                  where:(q.where==='early'||q.where==='late')?q.where:'middle',src:null}));
+      Q.shorts=(Array.isArray(data.short)?data.short:[]).slice(0,2)
+        .filter(s=>s&&s.q).map(s=>({q:String(s.q),ideal:String(s.ideal||'')}));
+      Q.ai=Q.qs.length>=3;
+    }catch(e){console.warn('AI quiz unavailable, using local quiz',e);}
+  }
+  if(!Q.ai){
+    Q.qs=localQuiz(from,to);Q.shorts=[];
+    if(!Q.qs.length){toast('Not enough material here to build a quiz');showScreen('reader');return;}
+  }
+  renderQ();
+}
+function renderQ(){
+  const total=Q.qs.length+Q.shorts.length;
+  const body=$('#qBody');
+  if(Q.cur<Q.qs.length){
+    const q=Q.qs[Q.cur];
+    $('#qProg').textContent='Question '+(Q.cur+1)+' of '+total;
+    const chip=q.where==='early'?'Early section':q.where==='late'?'Late section':'Middle section';
+    let html='<span class="qChip">'+chip+'</span>';
+    html+='<div class="qSentence">'+esc(q.q).replace(/_____/g,'<u>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</u>')+'</div>';
+    q.options.forEach(function(o,i){html+='<button class="opt" data-i="'+i+'">'+esc(o)+'</button>';});
+    body.innerHTML=html;
+    body.querySelectorAll('.opt').forEach(b=>b.addEventListener('click',onOpt));
+    body.scrollTop=0;
+  }else if(Q.cur-Q.qs.length<Q.shorts.length){
+    const si=Q.cur-Q.qs.length,sq=Q.shorts[si];
+    $('#qProg').textContent='Question '+(Q.cur+1)+' of '+total;
+    body.innerHTML='<span class="qChip">In your own words</span>'+
+      '<div class="qSentence" style="font-size:20px">'+esc(sq.q)+'</div>'+
+      '<textarea id="shortIn" style="width:100%;height:130px;background:var(--panel);border:0;outline:none;color:#fff;border-radius:14px;padding:14px;font-size:16px;resize:none" placeholder="Answer from memory\u2026"></textarea>'+
+      '<button class="bigBtn" id="shortGo">Submit</button>';
+    $('#shortGo').addEventListener('click',function(){Q.shortAns[si]=($('#shortIn').value||'').trim();Q.cur++;renderQ();});
+    body.scrollTop=0;
+  }else{
+    gradeQuiz();
+  }
+}
+function onOpt(e){
+  const pick=parseInt(e.currentTarget.dataset.i,10);
+  const q=Q.qs[Q.cur];
+  Q.answers[Q.cur]=pick;
+  const btns=$('#qBody').querySelectorAll('.opt');
+  btns.forEach(b=>b.disabled=true);
+  btns[q.answer].classList.add('right');
+  if(pick!==q.answer)btns[pick].classList.add('wrong');
+  setTimeout(function(){Q.cur++;renderQ();},pick===q.answer?550:1050);
+}
+function srcSentenceHTML(src){
+  let out='';
+  for(let i=src.s;i<=src.e;i++){
+    const t=esc(R.tokens[i].t);
+    out+=(i===src.ci?'<b>'+t+'</b>':t)+' ';
+  }
+  return out.trim();
+}
+async function gradeQuiz(){
+  qLoading('Scoring\u2026');
+  const mcqRight=Q.qs.reduce((n,q,i)=>n+(Q.answers[i]===q.answer?1:0),0);
+  const wrong=Q.qs.map((q,i)=>({q:q,i:i})).filter(x=>Q.answers[x.i]!==x.q.answer);
+  let shortScores=[],strengths=[],improvements=[],gapNote='';
+  if(Q.ai&&(Q.shorts.length||wrong.length)){
+    try{
+      const g=await aiGrade(wrong,mcqRight);
+      shortScores=(Array.isArray(g.shortScores)?g.shortScores:[]).map(n=>Math.max(0,Math.min(2,parseInt(n,10)||0)));
+      strengths=(Array.isArray(g.strengths)?g.strengths:[]).map(String).slice(0,3);
+      improvements=(Array.isArray(g.improvements)?g.improvements:[]).map(String).slice(0,3);
+      gapNote=String(g.gaps||'');
+    }catch(e){console.warn('AI grading failed',e);}
+  }
+  while(shortScores.length<Q.shorts.length)shortScores.push(Q.shortAns[shortScores.length]?1:0);
+  const pts=mcqRight+shortScores.reduce((a,b)=>a+b,0);
+  const max=Q.qs.length+2*Q.shorts.length;
+  const pct=Math.round(100*pts/Math.max(1,max));
+  const avg=R.sessMs>3000?Math.round(R.sessWords/(R.sessMs/60000)):0;
+  if(!strengths.length){
+    const tally={early:[0,0],middle:[0,0],late:[0,0]};
+    Q.qs.forEach(function(q,i){const t=tally[q.where];t[1]++;if(Q.answers[i]===q.answer)t[0]++;});
+    const names={early:'opening',middle:'middle',late:'final'};
+    Object.keys(tally).forEach(function(k){
+      const v=tally[k];
+      if(v[1]>0&&v[0]===v[1])strengths.push('Full marks on the '+names[k]+' section \u2014 that part clearly stuck.');
+      else if(v[1]>0&&v[0]===0)improvements.push('The '+names[k]+' section did not stick \u2014 worth a re-read.');
+      else if(v[1]>1&&v[0]/v[1]<0.6)improvements.push('Details from the '+names[k]+' section were shaky.');
+    });
+    if(pct>=85&&avg)strengths.push('Strong recall at '+avg+' WPM \u2014 you have headroom. Try about 10% faster next session.');
+    if(pct<60&&avg)improvements.push('Comprehension dropped at this pace \u2014 try about '+Math.round(avg*0.85)+' WPM and retest.');
+    else if(pct>=60&&pct<85)improvements.push('Solid but not airtight \u2014 hold this speed until you score 85%+.');
+    if(!strengths.length)strengths.push('You recalled '+mcqRight+' of '+Q.qs.length+' tested details correctly.');
+    if(!improvements.length)improvements.push('Nothing major \u2014 keep reading.');
+  }
+  const gaps=[];
+  wrong.forEach(function(x){
+    if(x.q.src)gaps.push({gq:'You missed: '+x.q.options[x.q.answer],html:srcSentenceHTML(x.q.src)});
+    else gaps.push({gq:'Correct answer: '+x.q.options[x.q.answer],html:esc(x.q.q)});
+  });
+  Q.shorts.forEach(function(s,i){
+    if((shortScores[i]||0)<2&&s.ideal)gaps.push({gq:'Model answer \u2014 '+s.q,html:esc(s.ideal)});
+  });
+  let firstMiss=null;
+  wrong.forEach(function(x){if(x.q.src&&(firstMiss===null||x.q.src.s<firstMiss))firstMiss=x.q.src.s;});
+
+  let html='<div class="scoreBig">'+pct+'<small>%</small></div>'+
+    '<div class="scoreSub">'+pts+' of '+max+' points'+(avg?' \u00b7 '+avg+' WPM this session':'')+(Q.ai?' \u00b7 AI-graded':'')+'</div>';
+  html+='<div class="resH">What went well</div>';
+  strengths.forEach(function(s){html+='<div class="resItem"><i>\u2713</i><span>'+esc(s)+'</span></div>';});
+  html+='<div class="resH">Areas for improvement</div>';
+  improvements.forEach(function(s){html+='<div class="resItem"><i>\u25b3</i><span>'+esc(s)+'</span></div>';});
+  html+='<div class="resH">Filling the gaps</div>';
+  if(gapNote)html+='<div class="gap"><span class="gq">What you missed, in short</span>'+esc(gapNote)+'</div>';
+  if(gaps.length)gaps.forEach(function(g){html+='<div class="gap"><span class="gq">'+esc(g.gq)+'</span>'+g.html+'</div>';});
+  if(!gaps.length&&!gapNote)html+='<div class="resItem"><i>\u2605</i><span>No gaps \u2014 you caught everything that was tested.</span></div>';
+  if(firstMiss!==null)html+='<button class="bigBtn" id="qReread">Re-read the missed section</button>';
+  html+='<button class="ghostBtn" id="qDone">Done</button>';
+  $('#qProg').textContent='Results';
+  const body=$('#qBody');
+  body.innerHTML=html;body.scrollTop=0;
+  if(firstMiss!==null)$('#qReread').addEventListener('click',function(){
+    R.idx=firstMiss;R.sessFrom=R.idx;
+    document.body.classList.add('started');
+    showScreen('reader');renderPage();updateProg();persistPos();
+  });
+  $('#qDone').addEventListener('click',function(){R.doc=null;showScreen('lib');renderLib();});
+}
+$('#qClose').addEventListener('click',function(){R.doc=null;showScreen('lib');renderLib();});
+
+/* ============ init ============ */
+async function init(){
+  await load();
+  if(!S.seeded){S.seeded=true;await addDoc(WELCOME.title,WELCOME.text,true);save();}
+  $('#hint').textContent=S.settings.hold==='hold'?'Hold to read \u00b7 release to pause':'Tap to play \u00b7 tap to pause';
+  $('#wpmSlider').value=S.settings.wpm;
+  renderLib();renderBrowse();syncSoundBtn();
+  setTimeout(function(){$('#splash').classList.add('gone');},900);
+}
+init();
+})();
+</script>
+</body>
+</html>
